@@ -6,6 +6,10 @@ import { SESSION_COOKIE, isValidSession } from "@/lib/auth";
  * except the login page, the login API and the health check.
  */
 export async function proxy(request: NextRequest) {
+  const passcode = process.env.APP_PASSCODE?.trim();
+  // Open access if no passcode set
+  if (!passcode) return NextResponse.next();
+
   const ok = await isValidSession(request.cookies.get(SESSION_COOKIE)?.value);
   if (ok) return NextResponse.next();
 

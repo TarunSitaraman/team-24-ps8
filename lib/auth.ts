@@ -1,8 +1,3 @@
-/**
- * Simple passcode login for the hackathon.
- * The cookie stores a hash of the passcode, not the passcode itself.
- * This file is used by proxy.ts and the login API, so it only uses Web Crypto.
- */
 export const SESSION_COOKIE = "app_session";
 
 export async function hashPasscode(passcode: string): Promise<string> {
@@ -15,6 +10,8 @@ export async function hashPasscode(passcode: string): Promise<string> {
 
 export async function isValidSession(cookieValue: string | undefined): Promise<boolean> {
   const passcode = process.env.APP_PASSCODE?.trim();
-  if (!passcode || !cookieValue) return false;
+  // If no passcode is configured, allow open local demo access
+  if (!passcode) return true;
+  if (!cookieValue) return false;
   return cookieValue === (await hashPasscode(passcode));
 }

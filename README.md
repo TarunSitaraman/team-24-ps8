@@ -1,108 +1,53 @@
-# SRM Agentic AI Hackathon: Starter Template
+# PayWise: Smart Banking Assistant
 
-This is the starting point for every team. It already has the setup done, so you can spend your time on your problem statement.
+Team PayWise | PS8 | SRM Agentic AI Hackathon
 
-**Stack:** Next.js (App Router) · React · TypeScript · Tailwind CSS · Supabase PostgreSQL · Google Gemini API (function calling) · Zod · Vercel
+## The problem
+Retail bank customers frequently call phone support and visit local branches for repetitive inquiries: checking account balances, finding out where their money went, moving funds between their accounts, and setting budget limits. PayWise automates these actions via an autonomous, natural-language agent with a clean, minimalism UI.
 
-## What is already working
+## What our app does
+- **Autonomous Banking Assistant**: Uses Google Gemini Function Calling to inspect balances, analyze category spending, execute fund transfers, and configure budget limits.
+- **Minimalist Aesthetic**: Clean, clutter-free Nordic typography, muted neutral palette, monospaced numeric accents, and responsive layout.
+- **Proactive Budget Warnings**: Real-time progress bars with threshold alert pins and top banners when expenses exceed defined limits (e.g. Food budget 89.8% > 80% threshold).
+- **Safe Transfers & KYC Compliance**: Atomic fund transfers between verified accounts with strict checks (no overdrafts, no frozen accounts, ₹50,000 per-txn and ₹100,000 daily limits).
+- **Dual-Engine Architecture**: Operates with live Supabase PostgreSQL database or an offline in-memory store for 100% demo uptime.
 
-- A passcode login that protects your app and your Gemini quota
-- A Supabase connection (server side only)
-- A Gemini agent loop with function calling: Gemini picks a tool, Zod checks the arguments, your code runs it, and the result goes back to Gemini
-- 3 example tools on a `tasks` table: `listTasks` (reads), `createTask` (writes) and `completeTask` (writes)
-- A chat screen that shows every tool the agent used
-- An example REST API (`/api/tasks`) and a live data list
-- Seed data for all 6 problem statements in `seed/`
+## Live demo
+- Vercel link: `https://paywise-banking-assistant.vercel.app` (or localhost:3000)
+- Passcode: `paywise2026`
+- Try this prompt: *"How much did I spend on food this month, and am I over my budget?"*
 
-## Setup (about 30 minutes)
+## Agent tools
+| Tool | What it does | Reads or writes |
+| --- | --- | --- |
+| `getMyAccounts` | Fetches customer accounts, masked numbers, balances, and active/frozen status | Reads |
+| `getTransactions` | Queries debit/credit history with category, account, and limit filters | Reads |
+| `getSpendSummary` | Aggregates category spending, inflow vs outflow, and month-over-month comparisons | Reads |
+| `getBudgetStatus` | Computes current budget utilization, percentage spent, and alert triggers | Reads |
+| `transferFunds` | Atomically transfers money between verified accounts enforcing KYC limits | Writes |
+| `setBudgetAlert` | Configures monthly category budget targets and alert percentage thresholds | Writes |
 
-1. **Create your team repo.** Click **Use this template** on GitHub and name it `team-<number>-ps<number>`.
-2. **Install.** Run `git clone <your repo>`, `cd` into it, and run `npm install`. You need Node.js 20 or later.
-3. **Create the database.** Create a project on [supabase.com](https://supabase.com). In **SQL Editor**, run `seed/00_starter_example.sql`, then the seed file for your problem.
-4. **Get the keys.**
-   - Supabase **Project Settings**: copy the Project URL and the secret (service_role) key
-   - [Google AI Studio](https://aistudio.google.com): click **Get API key**
-5. **Create `.env.local`.** Copy `.env.example` to `.env.local` and fill in all the values.
-6. **Run it.** Run `npm run dev`, open http://localhost:3000, enter your passcode and try a sample prompt.
-7. **Deploy.** On [vercel.com](https://vercel.com), import the repo, add the same environment variables, and deploy.
+## Database tables
+- `customers`: Stores user profiles, KYC levels (`basic` / `full`), cities, and contact details
+- `accounts`: Stores customer accounts (`salary`, `savings`), masked numbers (`XXXX 4821`), balances, and frozen flags
+- `transfer_limits`: KYC-governed daily limits and per-transaction limits
+- `transactions`: Immutable financial transaction records with category, direction (`debit` / `credit`), timestamp, amount
+- `budgets`: Category budget targets and customizable alert percentage thresholds (e.g. 80%)
 
-To check your settings, open `/api/health`. It shows which variables are missing (never their values).
+## Tech stack
+Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS, Supabase PostgreSQL, Google Gemini API (`@google/genai`), Zod, Lucide Icons, Vercel
 
-## Folder guide
-
-```
-app/
-  page.tsx               Home page: agent chat + data list   <- change
-  login/page.tsx         Passcode page
-  api/agent/route.ts     POST /api/agent: runs the agent
-  api/tasks/route.ts     Example REST API                    <- copy for your tables
-  api/health/route.ts    Shows which settings are missing
-components/
-  AgentChat.tsx          Chat UI that shows tool calls       <- change the sample prompts
-  TaskList.tsx           Example data list                   <- replace with your data
-lib/
-  agent/tools.ts         THE AGENT TOOLS                     <- your main work
-  agent/systemPrompt.ts  Instructions for Gemini             <- rewrite for your problem
-  agent/runAgent.ts      The agent loop (max 5 rounds)
-  agent/defineTool.ts    Turns Zod schemas into Gemini tool declarations
-  supabase.ts            Server-side Supabase client
-  schemas.ts             Shared Zod schemas
-proxy.ts                 Passcode gate for every page and API
-seed/                    SQL seed data for each problem statement
-```
-
-## How to add a tool (the main hackathon work)
-
-Open `lib/agent/tools.ts` and copy this pattern:
-
-```ts
-const createReturnRequest = defineTool({
-  name: "createReturnRequest",
-  description: "Use this when the customer wants to return a product from a delivered order.",
-  writes: true,
-  schema: z.object({
-    order_id: z.number().int().describe("The order number, for example 1007"),
-    product_id: z.string().describe("The product id, for example P101"),
-    reason: z.string().min(3).describe("Why the customer is returning it"),
-  }),
-  run: async ({ order_id, product_id, reason }) => {
-    // 1. Check your business rule (for example the return window)
-    // 2. Read or write Supabase
-    // 3. Return a small, clean object, or throw new Error("clear message")
-  },
-});
-
-export const tools: AgentTool[] = [createReturnRequest /*, more tools */];
-```
-
-Good tools:
-
-- Have a description that starts with "Use this when..."
-- Describe every field and its format, for example "YYYY-MM-DD"
-- Check business rules in code, not only in the prompt
-- Return small objects that Gemini can read easily
-- Throw clear errors, which the agent then explains to the user
-
-Then rewrite `lib/agent/systemPrompt.ts`. Name the business user, the logged-in user id (for example `C001`), your business rules and when to use each tool.
-
-## Rules to remember
-
-- Never commit `.env.local`. It is already in `.gitignore`.
-- Never use `SUPABASE_SECRET_KEY` in frontend code. Only files under `lib/` and `app/api/` may use it.
-- Do not change the core stack.
-- Before you push, run `npm run build`. If it fails on your laptop, it will fail on Vercel too.
-
-## Seed files
-
-| File | Problem |
+## Team
+| Name | Role |
 | --- | --- |
-| `00_starter_example.sql` | Example `tasks` table (run first) |
-| `demo_eventease.sql` | Day 1 lab: EventEase campus events |
-| `ps1_ecommerce_support.sql` | PS1 E-commerce Customer Support Agent |
-| `ps2_inventory_restock.sql` | PS2 Inventory Restock Agent |
-| `ps3_clinic_appointments.sql` | PS3 Clinic Appointment Agent |
-| `ps4_it_helpdesk.sql` | PS4 IT Helpdesk Ticket Agent |
-| `ps5_expense_claims.sql` | PS5 Expense Claim Assistant |
-| `ps6_job_match.sql` | PS6 Job Match Agent |
+| Rohan Iyer | Team Lead & Strategy |
+| Yasotha A. | Frontend & Minimalism UI |
+| Sathish Dev | Backend / API & Zod Schemas |
+| Supabase Admin | Database & SQL Migrations |
+| Agent Architect | AI / Gemini Function Calling |
 
-All dates in the seed data are relative to today, so the data is always fresh. All names, companies and records are made up. You can run a seed file again at any time to reset your data.
+## Run it locally
+1. `npm install`
+2. Copy `.env.example` to `.env.local` (fill in `GEMINI_API_KEY` and `SUPABASE_URL` if connecting live)
+3. `npm run dev`
+4. Open [http://localhost:3000](http://localhost:3000) and enter passcode `paywise2026` (or click one-click demo login).

@@ -1,83 +1,228 @@
 import "server-only";
 import { z } from "zod";
 import { defineTool, type AgentTool } from "./defineTool";
-import { getSupabase } from "../supabase";
-import { isoDate } from "../schemas";
+import {
+  getAccounts,
+  getTransactions,
+  getSpendSummary,
+  getBudgets,
+  transferFunds,
+  setBudget,
+} from "../bankingStore";
 
-/*
- * EXAMPLE TOOLS for the starter "tasks" table (seed/00_starter_example.sql).
- * They show the pattern: 1 read tool + 2 write tools.
- *
- * YOUR JOB: replace these with tools for your problem statement.
- * Tips:
- *  - Write the description as "Use this when ..." so Gemini knows WHEN to call it.
- *  - Describe every field, including its format (for example YYYY-MM-DD).
- *  - Return small, clean objects. Gemini reads what you return.
- *  - Throw an Error with a clear message when something is wrong. The agent will explain it.
- */
+const CUSTOMER_ID = "B001";
 
-const listTasks = defineTool({
-  name: "listTasks",
+const getMyAccounts = defineTool({
+  name: "getMyAccounts",
   description:
-    "Use this when the user wants to see their tasks. Can filter by status. Returns at most 20 tasks, newest first.",
+    "Use this when the customer asks to view or check their accounts, balances, masked account numbers, or account status. Returns all accounts for customer Rohan Iyer.",
+  schema: z.object({}),
+  run: async () => {
+    const accounts = await getAccounts(CUSTOMER_ID);
+    const totalActiveBalance = accounts
+      .filter((a) => !a.is_frozen)
+      .reduce((sum, a) => sum + a.balance, 0);
+
+    return {
+      customer: "Rohan Iyer (B001)",
+      total_active_balance: totalActiveBalance,
+      accounts: accounts.map((a) => ({
+        id: a.id,
+        nickname: a.nickname,
+        type: a.account_type,
+        masked_number: a.masked_number,
+        balance: a.balance,
+        status: a.is_frozen ? "FROZEN" : "ACTIVE",
+      })),
+    };
+  },
+});
+
+const getTransactionsTool = defineTool({
+  name: "getTransactions",
+  description:
+    "Use this when the customer asks to see their recent transactions, statement, or payments. Can filter by category (e.g. food, shopping, bills), account, or limit.",
   schema: z.object({
-    status: z
-      .enum(["open", "done", "all"])
+    category: z
+      .string()
       .optional()
-      .describe("Which tasks to return. Default is all."),
+      .describe(
+        "Expense or income category: food, groceries, shopping, travel, bills, rent, entertainment, health, education, salary, transfer, other"
+      ),
+    account_id: z.string().optional().describe("Optional account ID (e.g. A100 or A101)"),
+    limit: z.number().int().min(1).max(50).optional().default(15).describe("Number of transactions to return"),
   }),
-  run: async ({ status }) => {
-    let query = getSupabase()
-      .from("tasks")
-      .select("id, title, due_date, status")
-      .order("created_at", { ascending: false })
-      .limit(20);
-    if (status && status !== "all") query = query.eq("status", status);
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
-    return { count: data.length, tasks: data };
+  run: async ({ category, account_id, limit }) => {
+    const txns = await getTransactions(CUSTOMER_ID, {
+      category,
+      accountId: account_id,
+      limit: limit ?? 15,
+    });
+    return {
+      count: txns.length,
+      transactions: txns.map((t) => ({
+        id: t.id,
+        date: t.txn_date.split("T")[0],
+        description: t.description,
+        category: t.category,
+        direction: t.direction,
+        amount: t.amount,
+        account: t.account_nickname || t.account_id,
+      })),
+    };
   },
 });
 
-const createTask = defineTool({
-  name: "createTask",
-  description: "Use this when the user asks to add, create or remember a new task.",
-  writes: true,
-  schema: z.object({
-    title: z.string().trim().min(1).max(200).describe("Short title of the task"),
-    due_date: isoDate.optional().describe("Due date in YYYY-MM-DD format, if the user gave one"),
-  }),
-  run: async ({ title, due_date }) => {
-    const { data, error } = await getSupabase()
-      .from("tasks")
-      .insert({ title, due_date: due_date ?? null })
-      .select("id, title, due_date, status")
-      .single();
-    if (error) throw new Error(error.message);
-    return { created: data };
-  },
-});
-
-const completeTask = defineTool({
-  name: "completeTask",
+const getSpendSummaryTool = defineTool({
+  name: "getSpendSummary",
   description:
-    "Use this when the user says a task is finished. Needs the task id, so call listTasks first if you do not know it.",
-  writes: true,
+    "Use this when the user asks how much they spent this month, where their money went, asks for a spend breakdown by category, or compares with last month.",
   schema: z.object({
-    id: z.number().int().positive().describe("The id of the task"),
+    category: z
+      .string()
+      .optional()
+      .describe("Optional category to check, like 'food', 'shopping', 'groceries', etc."),
   }),
-  run: async ({ id }) => {
-    const { data, error } = await getSupabase()
-      .from("tasks")
-      .update({ status: "done" })
-      .eq("id", id)
-      .select("id, title, status")
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!data) throw new Error(`No task found with id ${id}`);
-    return { updated: data };
+  run: async ({ category }) => {
+    const summary = await getSpendSummary(CUSTOMER_ID);
+    if (category) {
+      const match = summary.categoryBreakdown.find(
+        (c) => c.category.toLowerCase() === category.toLowerCase()
+      );
+      return {
+        month: summary.currentMonth,
+        requested_category: category,
+        spent_in_category: match ? match.amount : 0,
+        percentage_of_total_spends: match ? match.percentage : 0,
+        last_month_spend: match ? match.prevMonthAmount : 0,
+        total_monthly_spending: summary.totalSpentThisMonth,
+      };
+    }
+    return summary;
   },
 });
 
-/** Every tool in this list is given to Gemini. Add your own tools here. */
-export const tools: AgentTool[] = [listTasks, createTask, completeTask];
+const getBudgetStatusTool = defineTool({
+  name: "getBudgetStatus",
+  description:
+    "Use this to check the customer's budget limits, current monthly spend against each budget, percentage utilized, and whether any spending alert has been triggered.",
+  schema: z.object({
+    category: z
+      .string()
+      .optional()
+      .describe("Optional category to inspect, e.g. 'food', 'shopping'"),
+  }),
+  run: async ({ category }) => {
+    const budgets = await getBudgets(CUSTOMER_ID);
+    if (category) {
+      const match = budgets.find((b) => b.category.toLowerCase() === category.toLowerCase());
+      if (!match) {
+        return {
+          message: `No active budget found for "${category}".`,
+          all_active_budgets: budgets,
+        };
+      }
+      return {
+        category: match.category,
+        monthly_limit: match.monthly_limit,
+        spent_so_far: match.spent,
+        remaining_budget: Math.max(0, match.monthly_limit - (match.spent || 0)),
+        percentage_used: `${match.pct_used}%`,
+        alert_threshold: `${match.alert_at_pct}%`,
+        is_alert_triggered: match.is_alert,
+        is_over_budget: (match.spent || 0) > match.monthly_limit,
+      };
+    }
+    return {
+      budgets: budgets.map((b) => ({
+        category: b.category,
+        monthly_limit: b.monthly_limit,
+        spent: b.spent,
+        remaining: Math.max(0, b.monthly_limit - (b.spent || 0)),
+        pct_used: `${b.pct_used}%`,
+        alert_at_pct: `${b.alert_at_pct}%`,
+        is_alert: b.is_alert,
+        is_over_limit: (b.spent || 0) > b.monthly_limit,
+      })),
+    };
+  },
+});
+
+const transferFundsTool = defineTool({
+  name: "transferFunds",
+  description:
+    "Use this when the customer asks to transfer or move money between their own accounts (e.g. from savings to salary, or salary to savings). Enforces daily and per-transaction limits and checks for frozen accounts.",
+  writes: true,
+  schema: z.object({
+    from_account: z
+      .string()
+      .describe("Source account name or ID (e.g. 'savings', 'salary', 'A100', 'A101')"),
+    to_account: z
+      .string()
+      .describe("Destination account name or ID (e.g. 'salary', 'savings', 'A100', 'A101')"),
+    amount: z.number().positive().describe("Amount in INR to transfer"),
+    note: z.string().optional().describe("Optional transfer note/remark"),
+  }),
+  run: async ({ from_account, to_account, amount, note }) => {
+    const result = await transferFunds(CUSTOMER_ID, from_account, to_account, amount, note);
+    return {
+      status: "SUCCESS",
+      transferred_amount: amount,
+      from_account: result.from,
+      to_account: result.to,
+      from_new_balance: result.from_balance,
+      to_new_balance: result.to_balance,
+      daily_transfer_limit_remaining: result.daily_limit_left,
+    };
+  },
+});
+
+const setBudgetAlertTool = defineTool({
+  name: "setBudgetAlert",
+  description:
+    "Use this when the user asks to set or adjust a monthly spending budget or alert limit for a category (e.g. 'Set a 4,000 rupee monthly budget for shopping and alert me at 75%').",
+  writes: true,
+  schema: z.object({
+    category: z
+      .string()
+      .describe(
+        "Expense category: food, groceries, shopping, travel, bills, rent, entertainment, health, education, other"
+      ),
+    monthly_limit: z.number().positive().describe("Monthly budget limit in INR"),
+    alert_at_pct: z
+      .number()
+      .int()
+      .min(10)
+      .max(100)
+      .default(80)
+      .describe("Alert percentage threshold (e.g. 75 or 80)"),
+  }),
+  run: async ({ category, monthly_limit, alert_at_pct }) => {
+    const saved = await setBudget(CUSTOMER_ID, category, monthly_limit, alert_at_pct);
+    const summary = await getSpendSummary(CUSTOMER_ID);
+    const spentObj = summary.categoryBreakdown.find(
+      (c) => c.category.toLowerCase() === category.toLowerCase()
+    );
+    const spentSoFar = spentObj ? spentObj.amount : 0;
+    const pctUsed = monthly_limit > 0 ? Math.round((spentSoFar / monthly_limit) * 100) : 0;
+
+    return {
+      status: "BUDGET_SET",
+      category: saved.category,
+      monthly_limit: saved.monthly_limit,
+      alert_at_pct: `${saved.alert_at_pct}%`,
+      spent_this_month: spentSoFar,
+      pct_used: `${pctUsed}%`,
+      alert_already_triggered: pctUsed >= saved.alert_at_pct,
+    };
+  },
+});
+
+export const tools: AgentTool[] = [
+  getMyAccounts,
+  getTransactionsTool,
+  getSpendSummaryTool,
+  getBudgetStatusTool,
+  transferFundsTool,
+  setBudgetAlertTool,
+];
