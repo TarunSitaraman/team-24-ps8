@@ -8,31 +8,13 @@ import {
   roundMoney,
   type Category,
 } from "./paywise";
+import type { Account, Budget } from "./types";
 
 /*
  * PayWise data layer. Agent tools AND API routes use these functions, so the
  * rules live in one place. Every query is scoped to CURRENT_CUSTOMER_ID.
  * Transfers are NOT here: they go only through the transfer_funds() database function.
  */
-
-export type Account = {
-  id: string;
-  nickname: string;
-  account_type: string;
-  masked_number: string;
-  balance: number;
-  is_frozen: boolean;
-};
-
-export type BudgetStatus = {
-  category: string;
-  monthly_limit: number;
-  spent_this_month: number;
-  left: number;
-  used_pct: number;
-  alert_at_pct: number;
-  status: "ok" | "alert" | "over";
-};
 
 async function ownAccounts(): Promise<Account[]> {
   const { data, error } = await getSupabase()
@@ -172,7 +154,7 @@ export async function spendSummary(from: string, toExclusive: string) {
 }
 
 /** Each budget with this month's spend and whether it has passed its alert level. */
-export async function budgetStatus(category?: string): Promise<BudgetStatus[]> {
+export async function budgetStatus(category?: string): Promise<Budget[]> {
   let query = getSupabase()
     .from("budgets")
     .select("category, monthly_limit, alert_at_pct")

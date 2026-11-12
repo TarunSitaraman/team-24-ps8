@@ -1,5 +1,27 @@
 @import "tailwindcss";
 
+/* PayWise design tokens: deep ink for structure, teal for the brand, semantic colours for money states. */
+@theme {
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --color-ink-950: #0b1620;
+  --color-ink-900: #10202e;
+  --color-ink-800: #1a3142;
+  --color-ink-600: #3d5567;
+  --color-ink-400: #7a8e9c;
+  --color-ink-200: #d3dce2;
+  --color-ink-100: #e7edf0;
+  --color-paper: #f4f6f3;
+  --color-brand-600: #0f766e;
+  --color-brand-500: #14918a;
+  --color-brand-100: #d5f0ec;
+}
+
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-paper text-ink-900 antialiased;
+}
+
+/* Money always lines up in columns. */
+.money {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
