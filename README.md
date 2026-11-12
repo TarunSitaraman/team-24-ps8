@@ -2,7 +2,7 @@
 
 This is the starting point for every team. It already has the setup done, so you can spend your time on your problem statement.
 
-**Stack:** Next.js (App Router) · React · TypeScript · Tailwind CSS · Supabase PostgreSQL · Google Gemini API (function calling) · Zod · Vercel
+**Stack:** Next.js (App Router) · React · TypeScript · Tailwind CSS · Supabase PostgreSQL · Google Gemini API (function calling) · Zod · Vercel  
 
 ## What is already working
 
