@@ -91,18 +91,19 @@ Code freeze is at 3:30. Judges look at the last commit before then.
 - [x] Data layer, 6 agent tools (2 write), system prompt, MAX_ROUNDS = 8
 - [x] API routes: accounts, transactions, budgets, spend-summary
 - [x] Theme, nav bar, banking chat home with live balances and budget alert banner
-- [ ] Commit the Accounts page (`app/accounts/page.tsx`, written, not committed)
-- [ ] Commit the Transactions page with category filter (`app/transactions/page.tsx`, written, not committed)
-- [ ] Budgets page with progress bars (`app/budgets/page.tsx`). Until it exists, the Budgets link is a 404
-- [ ] Monthly spend chart by category (`components/SpendChart.tsx`, stretch)
-- [ ] Set `GEMINI_MODEL=gemini-3.8-flash` in `.env.example` (no real keys in that file)
-- [ ] Add an `AGENTS.md` rules file (B001 fixed, transfers only via `transfer_funds()`, secret key server-only, safety rules)
-- [ ] `npm run build` passes locally
+- [x] Accounts page with balance cards, frozen badge and transfer limits
+- [x] Transactions page with category and account filters
+- [x] Budgets page with progress bars and alert marker
+- [x] Monthly spend chart by category (stretch)
+- [x] `GEMINI_MODEL=gemini-3.8-flash` in `.env.example`
+- [x] `AGENTS.md` project rules file
+- [x] `npm run build` passes locally
 
 **Set up and deploy**
 - [ ] Supabase project (Mumbai), with `00_starter_example.sql` and `ps8_smart_banking.sql` run
 - [ ] `.env.local` filled in, and `/api/health` shows all `true`
-- [ ] Vercel project imported from this repo, with all 5 env vars, deployed and the link added above
+- [x] Vercel project imported, with env vars added
+- [ ] Vercel link added above, and `/api/health` on Vercel shows all `true`
 - [ ] Passcode set on Vercel and written in the submission form
 
 **Test (on the Vercel link)**
