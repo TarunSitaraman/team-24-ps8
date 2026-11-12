@@ -35,15 +35,25 @@ export async function listAccounts() {
     .from("customers")
     .select("name, kyc_level")
     .eq("id", CURRENT_CUSTOMER_ID)
-    .single();
+    .maybeSingle();
   if (cErr) throw new Error(cErr.message);
+  if (!customer) {
+    throw new Error(
+      `Customer ${CURRENT_CUSTOMER_ID} not found in the customers table. Run seed/ps8_smart_banking.sql again in Supabase.`
+    );
+  }
 
   const { data: limits, error: lErr } = await db
     .from("transfer_limits")
     .select("daily_limit, per_txn_limit")
     .eq("kyc_level", customer.kyc_level)
-    .single();
+    .maybeSingle();
   if (lErr) throw new Error(lErr.message);
+  if (!limits) {
+    throw new Error(
+      `No transfer limits for KYC level "${customer.kyc_level}". Run seed/ps8_smart_banking.sql again in Supabase.`
+    );
+  }
 
   // Same window the transfer_funds() function uses: the database's current date (UTC).
   const todayUtc = new Date().toISOString().slice(0, 10);
