@@ -1,108 +1,123 @@
-# SRM Agentic AI Hackathon: Starter Template
+# PayWise: Smart Banking Assistant
 
-This is the starting point for every team. It already has the setup done, so you can spend your time on your problem statement.
+Team 24 | PS8 | SRM Agentic AI Hackathon
 
-**Stack:** Next.js (App Router) · React · TypeScript · Tailwind CSS · Supabase PostgreSQL · Google Gemini API (function calling) · Zod · Vercel  
+## The problem
+Retail bank customers call the bank or visit the branch for simple things: checking a balance, finding out where their money went, moving money between their own accounts and setting a spending limit. The call centre is overloaded with these requests.
 
-## What is already working
+## What our app does
+- Shows balances for all of the customer's accounts, with frozen accounts clearly marked
+- Explains spending by category ("How much did I spend on food this month?") and lists transactions with filters
+- Moves money between the customer's **own** accounts. The bank's rules are checked in the database: no frozen accounts, no overdraft, and per-transfer and daily KYC limits
+- Sets monthly budgets with an alert level, and warns when a budget passes it
+- Shows every step the agent takes in the chat, so the customer can see what was read and what was changed
 
-- A passcode login that protects your app and your Gemini quota
-- A Supabase connection (server side only)
-- A Gemini agent loop with function calling: Gemini picks a tool, Zod checks the arguments, your code runs it, and the result goes back to Gemini
-- 3 example tools on a `tasks` table: `listTasks` (reads), `createTask` (writes) and `completeTask` (writes)
-- A chat screen that shows every tool the agent used
-- An example REST API (`/api/tasks`) and a live data list
-- Seed data for all 6 problem statements in `seed/`
+Logged-in demo customer: **B001 (Rohan Iyer)**. The agent never takes a customer id from the chat.
 
-## Setup (about 30 minutes)
+## Live demo
+- Vercel link: _TODO_
+- Passcode: _TODO (share in the submission form only)_
+- Try this prompt: "How much did I spend on food this month, and am I over my budget?"
 
-1. **Create your team repo.** Click **Use this template** on GitHub and name it `team-<number>-ps<number>`.
-2. **Install.** Run `git clone <your repo>`, `cd` into it, and run `npm install`. You need Node.js 20 or later.
-3. **Create the database.** Create a project on [supabase.com](https://supabase.com). In **SQL Editor**, run `seed/00_starter_example.sql`, then the seed file for your problem.
-4. **Get the keys.**
-   - Supabase **Project Settings**: copy the Project URL and the secret (service_role) key
-   - [Google AI Studio](https://aistudio.google.com): click **Get API key**
-5. **Create `.env.local`.** Copy `.env.example` to `.env.local` and fill in all the values.
-6. **Run it.** Run `npm run dev`, open http://localhost:3000, enter your passcode and try a sample prompt.
-7. **Deploy.** On [vercel.com](https://vercel.com), import the repo, add the same environment variables, and deploy.
+More prompts:
+- "Move 20,000 from savings to my salary account."
+- "Set a 4,000 rupee monthly budget for shopping and alert me at 75%."
+- "Move 5,000 from my old savings to salary." (blocked: the account is frozen)
 
-To check your settings, open `/api/health`. It shows which variables are missing (never their values).
+## Agent tools
+| Tool | What it does | Reads or writes |
+| --- | --- | --- |
+| `getMyAccounts` | Accounts, balances, masked numbers, transfer limits and how much is left today | Reads |
+| `getTransactions` | Transactions filtered by category, account, direction, dates or a search word | Reads |
+| `getSpendSummary` | Spending by category for this month, last month or a date range | Reads |
+| `getBudgetStatus` | Each budget's limit, spend this month, % used and status (ok / alert / over) | Reads |
+| `transferFunds` | Moves money between the customer's own accounts via the `transfer_funds()` DB function | **Writes** |
+| `setBudgetAlert` | Creates or updates a monthly budget and its alert % for a category | **Writes** |
 
-## Folder guide
+How the agent works: the user asks in plain English → `/api/agent` sends the chat and the tool list to Gemini → Gemini picks a tool and its arguments → Zod checks the arguments → our code runs the tool against Supabase → the result goes back to Gemini. This repeats for up to 8 rounds until Gemini gives the final answer (`lib/agent/runAgent.ts`).
 
+Safety: the agent never asks for or shows a PIN, password, OTP or full account number (only masked numbers like `XXXX 7730` are stored and shown), and it declines investment advice.
+
+## Database tables
+- `customers`: customer name, city and KYC level (`basic` / `full`)
+- `accounts`: each customer's accounts with type, nickname, masked number, balance and frozen flag
+- `transfer_limits`: per-transfer and daily transfer limits for each KYC level
+- `transactions`: debits and credits with date, description and category
+- `budgets`: a monthly limit and alert % per customer and category
+- `transfer_funds()`: a database function that checks every transfer rule and updates both balances in one transaction
+
+Seed: `seed/ps8_smart_banking.sql`
+
+## Tech stack
+Next.js, React, TypeScript, Tailwind CSS, Supabase, Gemini API (function calling), Zod, Vercel
+
+## Team
+| Name | Role |
+| --- | --- |
+| _TODO_ | Team Lead |
+| _TODO_ | Frontend |
+| _TODO_ | Backend / API |
+| _TODO_ | Database |
+| _TODO_ | AI / Agent |
+
+## Run it locally
+1. `npm install`
+2. Copy `.env.example` to `.env.local` and fill in the keys (`GEMINI_API_KEY`, `GEMINI_MODEL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `APP_PASSCODE`)
+3. In the Supabase SQL Editor, run `seed/00_starter_example.sql`, then `seed/ps8_smart_banking.sql`
+4. `npm run dev` and open http://localhost:3000
+
+Open `/api/health` to see which settings are missing.
+
+## Project layout
 ```
 app/
-  page.tsx               Home page: agent chat + data list   <- change
-  login/page.tsx         Passcode page
-  api/agent/route.ts     POST /api/agent: runs the agent
-  api/tasks/route.ts     Example REST API                    <- copy for your tables
-  api/health/route.ts    Shows which settings are missing
-components/
-  AgentChat.tsx          Chat UI that shows tool calls       <- change the sample prompts
-  TaskList.tsx           Example data list                   <- replace with your data
+  page.tsx                Banking chat + live balances + budget alert banner
+  accounts/ transactions/ budgets/   Pages
+  api/agent               POST: runs the agent
+  api/accounts, api/transactions, api/budgets, api/spend-summary   GET: data for the pages
+components/               AgentChat, NavBar, AccountsSummary, BudgetAlertBanner, ...
 lib/
-  agent/tools.ts         THE AGENT TOOLS                     <- your main work
-  agent/systemPrompt.ts  Instructions for Gemini             <- rewrite for your problem
-  agent/runAgent.ts      The agent loop (max 5 rounds)
-  agent/defineTool.ts    Turns Zod schemas into Gemini tool declarations
-  supabase.ts            Server-side Supabase client
-  schemas.ts             Shared Zod schemas
-proxy.ts                 Passcode gate for every page and API
-seed/                    SQL seed data for each problem statement
+  agent/tools.ts          The 6 agent tools
+  agent/systemPrompt.ts   PayWise instructions for Gemini
+  banking.ts              Supabase queries shared by tools and API routes
+  paywise.ts              Customer id, categories, money and date helpers
+seed/ps8_smart_banking.sql
 ```
 
-## How to add a tool (the main hackathon work)
+## Remaining work checklist
+Code freeze is at 3:30. Judges look at the last commit before then.
 
-Open `lib/agent/tools.ts` and copy this pattern:
+**Build**
+- [x] Data layer, 6 agent tools (2 write), system prompt, MAX_ROUNDS = 8
+- [x] API routes: accounts, transactions, budgets, spend-summary
+- [x] Theme, nav bar, banking chat home with live balances and budget alert banner
+- [ ] Commit the Accounts page (`app/accounts/page.tsx`, written, not committed)
+- [ ] Commit the Transactions page with category filter (`app/transactions/page.tsx`, written, not committed)
+- [ ] Budgets page with progress bars (`app/budgets/page.tsx`). Until it exists, the Budgets link is a 404
+- [ ] Monthly spend chart by category (`components/SpendChart.tsx`, stretch)
+- [ ] Set `GEMINI_MODEL=gemini-3.8-flash` in `.env.example` (no real keys in that file)
+- [ ] Add an `AGENTS.md` rules file (B001 fixed, transfers only via `transfer_funds()`, secret key server-only, safety rules)
+- [ ] `npm run build` passes locally
 
-```ts
-const createReturnRequest = defineTool({
-  name: "createReturnRequest",
-  description: "Use this when the customer wants to return a product from a delivered order.",
-  writes: true,
-  schema: z.object({
-    order_id: z.number().int().describe("The order number, for example 1007"),
-    product_id: z.string().describe("The product id, for example P101"),
-    reason: z.string().min(3).describe("Why the customer is returning it"),
-  }),
-  run: async ({ order_id, product_id, reason }) => {
-    // 1. Check your business rule (for example the return window)
-    // 2. Read or write Supabase
-    // 3. Return a small, clean object, or throw new Error("clear message")
-  },
-});
+**Set up and deploy**
+- [ ] Supabase project (Mumbai), with `00_starter_example.sql` and `ps8_smart_banking.sql` run
+- [ ] `.env.local` filled in, and `/api/health` shows all `true`
+- [ ] Vercel project imported from this repo, with all 5 env vars, deployed and the link added above
+- [ ] Passcode set on Vercel and written in the submission form
 
-export const tools: AgentTool[] = [createReturnRequest /*, more tools */];
-```
+**Test (on the Vercel link)**
+- [ ] Food spend + budget question calls `getSpendSummary` and `getBudgetStatus`
+- [ ] "Move 20,000 from savings to my salary account" works, and the balances update on screen
+- [ ] "Set a 4,000 rupee monthly budget for shopping and alert me at 75%" saves it, and the alert banner shows
+- [ ] Rule errors are explained: frozen account, over Rs 50,000 per transfer, transfer to someone else's account (A200)
+- [ ] "What's my PIN?" and "Should I buy shares?" are declined
+- [ ] An unclear request ("move some money") gets one short question back
+- [ ] Every page works on a 360px phone screen
 
-Good tools:
-
-- Have a description that starts with "Use this when..."
-- Describe every field and its format, for example "YYYY-MM-DD"
-- Check business rules in code, not only in the prompt
-- Return small objects that Gemini can read easily
-- Throw clear errors, which the agent then explains to the user
-
-Then rewrite `lib/agent/systemPrompt.ts`. Name the business user, the logged-in user id (for example `C001`), your business rules and when to use each tool.
-
-## Rules to remember
-
-- Never commit `.env.local`. It is already in `.gitignore`.
-- Never use `SUPABASE_SECRET_KEY` in frontend code. Only files under `lib/` and `app/api/` may use it.
-- Do not change the core stack.
-- Before you push, run `npm run build`. If it fails on your laptop, it will fail on Vercel too.
-
-## Seed files
-
-| File | Problem |
-| --- | --- |
-| `00_starter_example.sql` | Example `tasks` table (run first) |
-| `demo_eventease.sql` | Day 1 lab: EventEase campus events |
-| `ps1_ecommerce_support.sql` | PS1 E-commerce Customer Support Agent |
-| `ps2_inventory_restock.sql` | PS2 Inventory Restock Agent |
-| `ps3_clinic_appointments.sql` | PS3 Clinic Appointment Agent |
-| `ps4_it_helpdesk.sql` | PS4 IT Helpdesk Ticket Agent |
-| `ps5_expense_claims.sql` | PS5 Expense Claim Assistant |
-| `ps6_job_match.sql` | PS6 Job Match Agent |
-
-All dates in the seed data are relative to today, so the data is always fresh. All names, companies and records are made up. You can run a seed file again at any time to reset your data.
+**Submit**
+- [ ] Team names and roles filled in above
+- [ ] Every team member has at least one commit
+- [ ] No keys anywhere in the repo (`git grep -i "key="`)
+- [ ] 5 slides: title and team, problem, solution and demo, how the agent works, results and links
+- [ ] Google Form submitted between 3:30 and 4:00: slides, GitHub link, Vercel link, passcode
+- [ ] Backup: the app also runs on localhost
